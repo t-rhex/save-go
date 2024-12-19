@@ -5,18 +5,18 @@
 package main
 
 import (
-    "bufio"
-    "encoding/json"
-    "fmt"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "regexp"
-    "sort"
-    "strconv"
-    "strings"
-    "sync"
-    "time"
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 type Command struct {
@@ -1294,7 +1294,7 @@ func printUsage() {
 
     // Title and Description
     fmt.Printf("\n%s%sSave Command Manager%s\n", bold, blue, reset)
-    fmt.Println("A tool to save, manage, and run shell commands with advanced features\n")
+    fmt.Print("A tool to save, manage, and run shell commands with advanced features\n")
 
     // Basic Usage
     fmt.Printf("%sUSAGE:%s\n", bold, reset)
