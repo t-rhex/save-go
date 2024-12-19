@@ -14,6 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: main
+          token: ${{ secrets.WORKFLOW_TOKEN }}
 
       - name: Set up Go
         uses: actions/setup-go@v4
@@ -23,15 +27,30 @@ jobs:
       - name: Update version in files
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
+
           # Update version in main.go
           sed -i "s/Version = \".*\"/Version = \"${VERSION#v}\"/" main.go
 
           # Update version in Makefile
           sed -i "s/VERSION := .*/VERSION := ${VERSION#v}/" Makefile
 
-          # Update version in README.md
+          # Update version and badges in README.md
           sed -i "s/@v[0-9.]*/@$VERSION/" README.md
           sed -i "s/Version: v[0-9.]*)/Version: $VERSION)/" README.md
+
+          # Add build status to README if not present
+          if ! grep -q "Build Status" README.md; then
+            sed -i "1i\\
+            [![Build Status](https://github.com/t-rhex/save-go/actions/workflows/build.yml/badge.svg)](https://github.com/t-rhex/save-go/actions/workflows/build.yml)\\
+            " README.md
+          fi
+
+          # Add Go Report Card if not present
+          if ! grep -q "Go Report Card" README.md; then
+            sed -i "1i\\
+            [![Go Report Card](https://goreportcard.com/badge/github.com/t-rhex/save-go)](https://goreportcard.com/report/github.com/t-rhex/save-go)\\
+            " README.md
+          fi
 
       - name: Build binaries
         run: |
@@ -40,6 +59,9 @@ jobs:
           GOOS=darwin GOARCH=amd64 go build -o dist/save-darwin-amd64
           GOOS=darwin GOARCH=arm64 go build -o dist/save-darwin-arm64
           GOOS=windows GOARCH=amd64 go build -o dist/save-windows-amd64.exe
+
+      - name: Run tests
+        run: go test -v ./...
 
       - name: Generate checksums
         run: |
@@ -69,4 +91,4 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git add main.go Makefile README.md CHANGELOG.md
           git commit -m "chore: Update version to ${GITHUB_REF#refs/tags/}"
-          git push
+          git push origin main
