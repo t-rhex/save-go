@@ -9,6 +9,7 @@
 ## 🚀 Quick Install
 
 ### Prerequisites
+
 - Go 1.21 or higher
 - Git
 - Make (for Unix/Linux/macOS)
@@ -16,11 +17,13 @@
 ### One-Line Installation
 
 #### Linux/macOS
+
 ```bash
 curl -sSL https://raw.githubusercontent.com/t-rhex/save-go/main/install.sh | bash
 ```
 
 #### Windows (PowerShell)
+
 ```powershell
 # Run as administrator
 Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/t-rhex/save-go/main/install.ps1')
@@ -29,6 +32,7 @@ Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://raw.
 ### Manual Installation
 
 1. Clone and Build:
+
 ```bash
 git clone https://github.com/t-rhex/save-go.git
 cd save-go
@@ -37,17 +41,21 @@ cd save-go
 2. Choose Installation Method:
 
 #### Unix/Linux/macOS:
+
 **User Installation** (Recommended, no sudo required):
+
 ```bash
 make user-install
 ```
 
 **System-wide Installation** (Requires sudo):
+
 ```bash
 make install
 ```
 
 #### Windows:
+
 ```powershell
 # Build
 go build -o save.exe
@@ -67,6 +75,7 @@ if ($userPath -notlike "*$installPath*") {
 3. Add to Shell (if using user installation):
 
 #### Unix/Linux/macOS:
+
 ```bash
 # For Bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
@@ -78,6 +87,7 @@ echo 'fpath=(~/.zsh/completion $fpath)' >> ~/.zshrc
 ```
 
 #### Windows (PowerShell):
+
 ```powershell
 # Add to PowerShell profile
 if (!(Test-Path $PROFILE)) { New-Item -Type File -Force $PROFILE }
@@ -91,11 +101,13 @@ save --generate-completion powershell > "$env:USERPROFILE\Documents\WindowsPower
 4. Reload Shell:
 
 #### Unix/Linux/macOS:
+
 ```bash
 source ~/.bashrc  # or source ~/.zshrc for Zsh
 ```
 
 #### Windows:
+
 ```powershell
 # Reload PATH
 $env:Path = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -120,6 +132,7 @@ save --search "docker"
 ## 📚 Features
 
 ### Core Features
+
 - ✨ Command execution and storage with metadata
 - 📁 Directory context tracking
 - 🏷️ Tagging system
@@ -129,6 +142,7 @@ save --search "docker"
 - 📊 Usage statistics
 
 ### Advanced Features
+
 - 🔗 Command chains with dependencies
 - ⚡ Parallel execution support
 - 🎯 Conditional execution
@@ -139,6 +153,7 @@ save --search "docker"
 ## 💻 Usage Examples
 
 ### Basic Command Management
+
 ```bash
 # Save with current directory
 save --dir 'npm start'
@@ -154,6 +169,7 @@ save --interactive-edit 42
 ```
 
 ### Command Chains
+
 ```bash
 # Create deployment chain
 save --create-chain 'deploy' 'Deploy to prod' steps.json deps.json
@@ -163,6 +179,7 @@ save --run-chain 1
 ```
 
 ### Search and Analytics
+
 ```bash
 # Search by tag
 save --filter-tag docker
@@ -177,6 +194,7 @@ save --export history.json
 ## ⚙️ Configuration
 
 ### Default Paths
+
 - Config: `~/.config/save/config.json`
 - History: `~/.save_history.json`
 - Completions:
@@ -184,6 +202,7 @@ save --export history.json
   - Zsh: `~/.zsh/completion/_save`
 
 ### Environment Variables
+
 ```bash
 SAVE_CONFIG_PATH   # Custom config file location
 SAVE_HISTORY_PATH  # Custom history file location
@@ -193,6 +212,7 @@ SAVE_NO_COLOR      # Disable color output
 ## 🔄 Updates
 
 ### Unix/Linux/macOS:
+
 ```bash
 # Update to latest version
 cd save-go
@@ -201,6 +221,7 @@ make update
 ```
 
 ### Windows:
+
 ```powershell
 # Update to latest version
 cd save-go
@@ -214,18 +235,21 @@ Copy-Item save.exe -Destination "$env:USERPROFILE\AppData\Local\save\save.exe" -
 ### Common Issues
 
 1. Command not found
+
 ```bash
 # Add to PATH
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
 2. No shell completion
+
 ```bash
 # Reload shell completion
 source ~/.bashrc  # or source ~/.zshrc
 ```
 
 3. Permission denied
+
 ```bash
 # Fix permissions
 chmod +x $HOME/.local/bin/save
@@ -253,4 +277,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - 🐛 [Report Bug](https://github.com/t-rhex/save-go/issues)
 - 💡 [Request Feature](https://github.com/t-rhex/save-go/issues)
-- 📧 [Email Support](mailto:support@example.com)
+- 📧 [Email Support](mailto:andrew@techvoyager.me)
