@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-set -e
+# Uncomment for debugging
+# set -x  # Print each command before executing
+set -e    # Exit on error
 
 # Color codes
 RED='\033[0;31m'
@@ -8,6 +10,12 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Print with color functions
+info() { echo -e "${BLUE}INFO:${NC} $1"; }
+success() { echo -e "${GREEN}SUCCESS:${NC} $1"; }
+warn() { echo -e "${YELLOW}WARNING:${NC} $1"; }
+error() { echo -e "${RED}ERROR:${NC} $1"; exit 1; }
 
 # Helper functions
 get_latest_version() {
@@ -29,12 +37,6 @@ BINARY="save"
 REPO="t-rhex/save-go"
 INSTALL_PATH="$HOME/.local/bin"
 INSTALL_TYPE=${INSTALL_TYPE:-"user"}  # Default to user install
-
-# Print with color
-info() { echo -e "${BLUE}INFO:${NC} $1"; }
-success() { echo -e "${GREEN}SUCCESS:${NC} $1"; }
-warn() { echo -e "${YELLOW}WARNING:${NC} $1"; }
-error() { echo -e "${RED}ERROR:${NC} $1"; exit 1; }
 
 # Check if command exists
 check_command() {
@@ -233,4 +235,10 @@ main() {
 }
 
 # Run main installation
-main 
+if [ "${1:-}" = "--test" ]; then
+    # Test specific functions
+    check_prerequisites
+    setup_directories
+else
+    main
+fi
