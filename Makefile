@@ -1,6 +1,9 @@
-VERSION := 0.1.0
+VERSION := $(shell git describe --tags --always --dirty)
 BINARY := save
 GOFILES := $(wildcard *.go)
+DEV_BINARY := $(BINARY)-dev
+DEV_VERSION := $(VERSION)-dev
+DEV_CONFIG_PATH := $(HOME)/.config/save-dev
 
 # Check if running on macOS or Linux
 UNAME := $(shell uname)
@@ -12,20 +15,49 @@ else
     INSTALL_PATH := $(HOME)/.local/bin
 endif
 
-.PHONY: all build clean install uninstall user-install update dev
+LDFLAGS := -X main.Version=$(VERSION)
+DEV_LDFLAGS := -X main.Version=$(DEV_VERSION) -X main.ConfigPath=$(DEV_CONFIG_PATH)
 
-# TODO: Add test target once tests are implemented
-# .PHONY: test
-# test:
-#   go test -v ./...
+.PHONY: all build build-dev clean install uninstall user-install update dev test help
+
+# Add help target as default
+.DEFAULT_GOAL := help
+
+# Help target
+help:
+	@echo "Available targets:"
+	@echo "  help           - Show this help message"
+	@echo "  all            - Build the application (default)"
+	@echo "  build          - Build the application"
+	@echo "  build-dev      - Build the application with debug information"
+	@echo "  clean          - Remove built binaries"
+	@echo "  install        - Install system-wide (requires sudo)"
+	@echo "  user-install   - Install for current user only"
+	@echo "  uninstall      - Remove the application"
+	@echo "  update         - Update to latest version"
+	@echo "  dev            - Build and run development version"
+	@echo "  test           - Run tests"
+	@echo
+	@echo "Version: $(VERSION)"
+	@echo "Install path: $(INSTALL_PATH)"
 
 all: build
 
 build: $(GOFILES)
-	go build -ldflags "-X main.Version=$(VERSION)" -o $(BINARY)
+	go build -ldflags "$(LDFLAGS)" -o $(BINARY)
+
+build-dev: $(GOFILES)
+	@mkdir -p $(DEV_CONFIG_PATH)
+	@echo "Building development version with config path: $(DEV_CONFIG_PATH)"
+	go build -ldflags "$(DEV_LDFLAGS)" -gcflags="all=-N -l" -o $(DEV_BINARY)
 
 clean:
 	rm -f $(BINARY)
+	rm -f $(DEV_BINARY)
+	@echo "Note: Development config directory $(DEV_CONFIG_PATH) is preserved"
+
+test:
+	go test -v ./...
 
 # System-wide installation (requires sudo)
 install: build
@@ -74,7 +106,5 @@ uninstall:
 	rm -f $(HOME)/.zsh/completion/_$(BINARY)
 
 # Development helpers
-dev: build
-	@./$(BINARY)
-
-.DEFAULT_GOAL := all
+dev: build-dev
+	@./$(DEV_BINARY)

@@ -1,42 +1,3 @@
-
-## [v0.1.0] - 2024-12-19
-
-### Changes
-- Fix: Shell command fix
-- Update install.sh
-- chore: Update version to v0.1.0
-- Fix: Workflow fix
-- Feature: improve documentation and added a single installation script
--  Feature: new filter features
--  Fix: Makefile fix
-- chore: Update version to v0.1.0
--  Fix: Makefile run without sudo
--  Fix: Makefile run without sudo
-- chore: Update version to v0.1.0
--  Fix: Workflow fix
--  Feature: New workflow
--  Minor fixes
-- Initial commit
-- Initial commit
-
-
-## [v0.1.0] - 2024-12-19
-
-### Changes
-- Fix: Workflow fix
-- Feature: improve documentation and added a single installation script
--  Feature: new filter features
--  Fix: Makefile fix
-- chore: Update version to v0.1.0
--  Fix: Makefile run without sudo
--  Fix: Makefile run without sudo
-- chore: Update version to v0.1.0
--  Fix: Workflow fix
--  Feature: New workflow
--  Minor fixes
-- Initial commit
-- Initial commit
-
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -44,10 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Development build support with separate config path
+- Improved Makefile with help target and better documentation
+- Windows support with PowerShell installation script
+
 ## [0.1.0] - 2024-12-19
 
 ### Added
-
 - Core Command Management
   - Basic command execution and storage
   - Command history with unique IDs
@@ -90,11 +57,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Edit history tracking
   - Automatic stats updates
 
-### Removed
-- Duplicate changelog entries
+### Fixed
+- Shell command execution issues
+- Makefile sudo requirements
+- Workflow configuration
 
-## [v0.1.0] - 2024-12-19
-
-
-## [v0.1.0] - 2024-12-19
+### Changed
+- Improved documentation
+- Enhanced installation process
+- Added single installation script
 

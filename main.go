@@ -120,18 +120,35 @@ func NewCommandStore() (*CommandStore, error) {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
+	// Use ConfigPath if set during build, otherwise use default
+	configPath := ConfigPath
+	if configPath == "" {
+		configPath = filepath.Join(homeDir, ".save_history.json")
+	}
+
 	return &CommandStore{
-		filepath: filepath.Join(homeDir, ".save_history.json"),
+		filepath: configPath,
 		commands: []Command{},
 	}, nil
 }
 
 func (cs *CommandStore) save() error {
-    data, err := json.MarshalIndent(cs.commands, "", "    ")
+    // Create a structure to hold both commands and chains
+    type SaveData struct {
+        Commands []Command      `json:"commands"`
+        Chains   []CommandChain `json:"chains"`
+    }
+    
+    data := SaveData{
+        Commands: cs.commands,
+        Chains:   cs.chains,
+    }
+    
+    jsonData, err := json.MarshalIndent(data, "", "    ")
     if err != nil {
         return err
     }
-    return os.WriteFile(cs.filepath, data, 0644)
+    return os.WriteFile(cs.filepath, jsonData, 0644)
 }
 
 // Add method for tag manipulation
@@ -290,38 +307,76 @@ func (cs *CommandStore) UndoLastEdit(id int) error {
 
 
 func (cs *CommandStore) load() error {
-	data, err := os.ReadFile(cs.filepath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
+    data, err := os.ReadFile(cs.filepath)
+    if err != nil {
+        if os.IsNotExist(err) {
+            return nil
+        }
+        return err
+    }
 
-	if err := json.Unmarshal(data, &cs.commands); err != nil {
-		return err
-	}
+    // Create a structure to hold both commands and chains
+    type SaveData struct {
+        Commands []Command      `json:"commands"`
+        Chains   []CommandChain `json:"chains"`
+    }
 
-	for _, cmd := range cs.commands {
-		if cmd.ID > cs.lastID {
-			cs.lastID = cmd.ID
-		}
-	}
+    var saveData SaveData
+    if err := json.Unmarshal(data, &saveData); err != nil {
+        // Try loading legacy format (just commands)
+        if err := json.Unmarshal(data, &cs.commands); err != nil {
+            return err
+        }
+    } else {
+        cs.commands = saveData.Commands
+        cs.chains = saveData.Chains
+    }
 
-	cs.updateStats()
-	return nil
+    // Update lastID
+    for _, cmd := range cs.commands {
+        if cmd.ID > cs.lastID {
+            cs.lastID = cmd.ID
+        }
+    }
+
+    // Update lastChainID
+    for _, chain := range cs.chains {
+        if chain.ID > cs.lastChainID {
+            cs.lastChainID = chain.ID
+        }
+    }
+
+    cs.updateStats()
+    return nil
+}
+
+func (cs *CommandStore) RemoveCommands(ids []int) error {
+    // Create a map for quick lookup of IDs to remove
+    toRemove := make(map[int]bool)
+    for _, id := range ids {
+        toRemove[id] = true
+    }
+    
+    // Create a new slice with commands that should be kept
+    newCommands := make([]Command, 0, len(cs.commands))
+    for _, cmd := range cs.commands {
+        if !toRemove[cmd.ID] {
+            newCommands = append(newCommands, cmd)
+        }
+    }
+    
+    // If no commands were removed, return an error
+    if len(newCommands) == len(cs.commands) {
+        return fmt.Errorf("no commands found with the specified IDs")
+    }
+    
+    cs.commands = newCommands
+    cs.updateStats()
+    return cs.save()
 }
 
 func (cs *CommandStore) RemoveCommand(id int) error {
-    for i, cmd := range cs.commands {
-        if cmd.ID == id {
-            // Remove the command by slicing
-            cs.commands = append(cs.commands[:i], cs.commands[i+1:]...)
-            cs.updateStats()
-            return cs.save()
-        }
-    }
-    return fmt.Errorf("command with ID %d not found", id)
+    return cs.RemoveCommands([]int{id})
 }
 
 func (cs *CommandStore) updateCommandStats(id int, exitCode int) error {
@@ -820,17 +875,27 @@ _save_completion() {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="--dir --list --search --filter-dir --export --rerun --tag --desc --favorite --stats"
+    opts="--dir --list --search --filter-dir --filter-tag --export --import --rerun --tag --desc --favorite --stats --remove --interactive-edit --add-tags --remove-tags --undo --create-chain --create-chain-with-deps --run-chain --list-chains --help --config-path"
 
     case "${prev}" in
-        --rerun)
+        --rerun|--favorite|--remove|--interactive-edit|--undo)
             # Complete with command IDs
             COMPREPLY=( $(save --list | grep "^#" | cut -d" " -f1 | cut -c2- | grep "^${cur}") )
             return 0
             ;;
-        --tag)
+        --tag|--add-tags|--remove-tags|--filter-tag)
             # Complete with existing tags
             COMPREPLY=( $(save --list-tags | grep "^${cur}") )
+            return 0
+            ;;
+        --filter-dir)
+            # Directory completion
+            COMPREPLY=( $(compgen -d -- "${cur}") )
+            return 0
+            ;;
+        --run-chain)
+            # Complete with chain IDs
+            COMPREPLY=( $(save --list-chains | grep "^#" | cut -d" " -f1 | cut -c2- | grep "^${cur}") )
             return 0
             ;;
         *)
@@ -853,16 +918,49 @@ _save() {
         '--list[List commands]'
         '--search[Search commands]'
         '--filter-dir[Filter by directory]'
+        '--filter-tag[Filter by tag]'
         '--export[Export history]'
+        '--import[Import commands]'
         '--rerun[Re-run command]'
         '--tag[Add tags]'
         '--desc[Add description]'
         '--favorite[Mark as favorite]'
         '--stats[Show statistics]'
+        '--remove[Remove command(s)]'
+        '--interactive-edit[Edit command interactively]'
+        '--add-tags[Add tags to command]'
+        '--remove-tags[Remove tags from command]'
+        '--undo[Undo last edit]'
+        '--create-chain[Create new command chain]'
+        '--create-chain-with-deps[Create chain with dependencies]'
+        '--run-chain[Run a command chain]'
+        '--list-chains[List all chains]'
+        '--help[Show help]'
+        '--config-path[Show config file location]'
     )
 
     _arguments -C \
-        "${opts[@]}"
+        "${opts[@]}" \
+        "*::arg:->args"
+
+    case $state in
+        args)
+            case $words[1] in
+                --rerun|--favorite|--remove|--interactive-edit|--undo)
+                    _values "command IDs" $(save --list | grep "^#" | cut -d" " -f1 | cut -c2-)
+                    ;;
+                --tag|--add-tags|--remove-tags|--filter-tag)
+                    _values "tags" $(save --list-tags)
+                    ;;
+                --filter-dir)
+                    _path_files -/
+                    ;;
+                --run-chain)
+                    _values "chain IDs" $(save --list-chains | grep "^#" | cut -d" " -f1 | cut -c2-)
+                    ;;
+            esac
+            ;;
+    esac
 }
 
 _save`
@@ -883,6 +981,233 @@ func containsTag(tags []string, query string) bool {
 }
 
 var Version string // This will be set during build
+var ConfigPath string // This will be set during build
+
+// Add this function at the top level to maintain a list of valid command flags
+var validCommandFlags = map[string]bool{
+    "--favorite": true,
+    "--remove": true,
+    "--list": true,
+    "--search": true,
+    "--filter-dir": true,
+    "--filter-tag": true,
+    "--stats": true,
+    "--rerun": true,
+    "--interactive-edit": true,
+    "--add-tags": true,
+    "--remove-tags": true,
+    "--undo": true,
+    "--import": true,
+    "--export": true,
+    "--create-chain": true,
+    "--run-chain": true,
+    "--list-chains": true,
+    "--help": true,
+    "--config-path": true,
+    "--version": true,
+    "--install-completion": true,
+    "--verify": true,
+    "--backup": true,
+}
+
+// Add these new types for backup management
+type BackupMetadata struct {
+    Version     string    `json:"version"`
+    CreatedAt   time.Time `json:"created_at"`
+    CommandCount int      `json:"command_count"`
+    ChainCount  int      `json:"chain_count"`
+}
+
+type BackupData struct {
+    Metadata BackupMetadata  `json:"metadata"`
+    Commands []Command       `json:"commands"`
+    Chains   []CommandChain  `json:"chains"`
+}
+
+// Add these methods to CommandStore
+func (cs *CommandStore) createBackup(backupPath string) error {
+    backup := BackupData{
+        Metadata: BackupMetadata{
+            Version:      Version,
+            CreatedAt:    time.Now(),
+            CommandCount: len(cs.commands),
+            ChainCount:   len(cs.chains),
+        },
+        Commands: cs.commands,
+        Chains:   cs.chains,
+    }
+
+    data, err := json.MarshalIndent(backup, "", "    ")
+    if err != nil {
+        return fmt.Errorf("failed to marshal backup data: %w", err)
+    }
+
+    // Create backup directory if it doesn't exist
+    backupDir := filepath.Join(filepath.Dir(cs.filepath), "backups")
+    if err := os.MkdirAll(backupDir, 0755); err != nil {
+        return fmt.Errorf("failed to create backup directory: %w", err)
+    }
+
+    // Use timestamp in backup filename if not provided
+    if backupPath == "" {
+        timestamp := time.Now().Format("20060102-150405")
+        backupPath = filepath.Join(backupDir, fmt.Sprintf("save-history-%s.json", timestamp))
+    }
+
+    if err := os.WriteFile(backupPath, data, 0644); err != nil {
+        return fmt.Errorf("failed to write backup file: %w", err)
+    }
+
+    return nil
+}
+
+func (cs *CommandStore) restoreFromBackup(backupPath string) error {
+    data, err := os.ReadFile(backupPath)
+    if err != nil {
+        return fmt.Errorf("failed to read backup file: %w", err)
+    }
+
+    var backup BackupData
+    if err := json.Unmarshal(data, &backup); err != nil {
+        return fmt.Errorf("failed to parse backup data: %w", err)
+    }
+
+    // Create a backup of current data before restoring
+    if err := cs.createBackup(""); err != nil {
+        return fmt.Errorf("failed to create safety backup: %w", err)
+    }
+
+    // Restore data
+    cs.commands = backup.Commands
+    cs.chains = backup.Chains
+
+    // Update IDs
+    for _, cmd := range cs.commands {
+        if cmd.ID > cs.lastID {
+            cs.lastID = cmd.ID
+        }
+    }
+    for _, chain := range cs.chains {
+        if chain.ID > cs.lastChainID {
+            cs.lastChainID = chain.ID
+        }
+    }
+
+    cs.updateStats()
+    return cs.save()
+}
+
+func (cs *CommandStore) verifyIntegrity() error {
+    // Check for duplicate command IDs
+    idMap := make(map[int]bool)
+    for _, cmd := range cs.commands {
+        if idMap[cmd.ID] {
+            return fmt.Errorf("duplicate command ID found: %d", cmd.ID)
+        }
+        idMap[cmd.ID] = true
+    }
+
+    // Check chain IDs
+    chainMap := make(map[int]bool)
+    for _, chain := range cs.chains {
+        if chainMap[chain.ID] {
+            return fmt.Errorf("duplicate chain ID found: %d", chain.ID)
+        }
+        chainMap[chain.ID] = true
+    }
+
+    // Verify chain dependencies
+    for _, chain := range cs.chains {
+        for _, dep := range chain.Dependencies {
+            if !chainMap[dep.ChainID] {
+                return fmt.Errorf("chain %d depends on non-existent chain %d", chain.ID, dep.ChainID)
+            }
+        }
+    }
+
+    // Verify command references in chains
+    for _, chain := range cs.chains {
+        for _, step := range chain.Steps {
+            if !idMap[step.CommandID] {
+                return fmt.Errorf("chain %d references non-existent command %d", chain.ID, step.CommandID)
+            }
+            for _, parallelCmd := range step.ParallelWith {
+                if !idMap[parallelCmd] {
+                    return fmt.Errorf("chain %d references non-existent parallel command %d", chain.ID, parallelCmd)
+                }
+            }
+        }
+    }
+
+    // Verify timestamps
+    for _, cmd := range cs.commands {
+        if cmd.Timestamp.IsZero() {
+            return fmt.Errorf("command %d has invalid timestamp", cmd.ID)
+        }
+    }
+
+    // Verify run counts
+    for _, cmd := range cs.commands {
+        if cmd.SuccessCount > cmd.RunCount {
+            return fmt.Errorf("command %d has more successes than runs", cmd.ID)
+        }
+    }
+
+    return nil
+}
+
+func (cs *CommandStore) repairIntegrity() error {
+    // Remove commands with duplicate IDs (keep the first occurrence)
+    idMap := make(map[int]bool)
+    newCommands := make([]Command, 0, len(cs.commands))
+    for _, cmd := range cs.commands {
+        if !idMap[cmd.ID] {
+            idMap[cmd.ID] = true
+            newCommands = append(newCommands, cmd)
+        }
+    }
+    cs.commands = newCommands
+
+    // Remove chains with duplicate IDs
+    chainMap := make(map[int]bool)
+    newChains := make([]CommandChain, 0, len(cs.chains))
+    for _, chain := range cs.chains {
+        if !chainMap[chain.ID] {
+            chainMap[chain.ID] = true
+            newChains = append(newChains, chain)
+        }
+    }
+    cs.chains = newChains
+
+    // Remove invalid chain dependencies
+    for i := range cs.chains {
+        validDeps := make([]ChainDependency, 0)
+        for _, dep := range cs.chains[i].Dependencies {
+            if chainMap[dep.ChainID] {
+                validDeps = append(validDeps, dep)
+            }
+        }
+        cs.chains[i].Dependencies = validDeps
+    }
+
+    // Fix timestamps
+    now := time.Now()
+    for i := range cs.commands {
+        if cs.commands[i].Timestamp.IsZero() {
+            cs.commands[i].Timestamp = now
+        }
+    }
+
+    // Fix run counts
+    for i := range cs.commands {
+        if cs.commands[i].SuccessCount > cs.commands[i].RunCount {
+            cs.commands[i].SuccessCount = cs.commands[i].RunCount
+        }
+    }
+
+    cs.updateStats()
+    return cs.save()
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -1005,7 +1330,7 @@ func main() {
 
 	case "--create-chain-with-deps":
 		if len(os.Args) < 6 {
-			fmt.Println("Error: --create-chain-with-deps requires name, description, steps, and dependencies")
+			fmt.Println("Error: --create-chain-with-deps requires name, description, steps file, and dependencies file")
 			fmt.Println("Usage: save --create-chain-with-deps <name> <description> <steps.json> <dependencies.json>")
 			os.Exit(1)
 		}
@@ -1036,8 +1361,7 @@ func main() {
 			os.Exit(1)
 		}
 		
-		// Create the chain with the parsed data
-		chain := &CommandChain{
+		chain := CommandChain{
 			Name:         os.Args[2],
 			Description:  os.Args[3],
 			Steps:        steps,
@@ -1045,10 +1369,10 @@ func main() {
 			CreatedAt:    time.Now(),
 		}
 		
-		// Save the chain
 		store.lastChainID++
 		chain.ID = store.lastChainID
-		store.chains = append(store.chains, *chain)
+		store.chains = append(store.chains, chain)
+		
 		if err := store.save(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error saving chain: %v\n", err)
 			os.Exit(1)
@@ -1062,19 +1386,30 @@ func main() {
 	
 	case "--remove":
 		if len(os.Args) < 3 {
-			fmt.Println("Error: --remove requires a command ID")
+			fmt.Println("Error: --remove requires at least one command ID")
 			os.Exit(1)
 		}
-		id, err := strconv.Atoi(os.Args[2])
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: invalid command ID\n")
-			os.Exit(1)
+		
+		// Split the comma-separated IDs
+		idStrs := strings.Split(os.Args[2], ",")
+		ids := make([]int, 0, len(idStrs))
+		
+		// Convert each ID string to int
+		for _, idStr := range idStrs {
+			id, err := strconv.Atoi(strings.TrimSpace(idStr))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: invalid command ID '%s'\n", idStr)
+				os.Exit(1)
+			}
+			ids = append(ids, id)
 		}
-		if err := store.RemoveCommand(id); err != nil {
+		
+		// Remove the commands
+		if err := store.RemoveCommands(ids); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("Removed command #%d\n", id)
+		fmt.Printf("Removed %d command(s)\n", len(ids))
 	
 	case "--list":
 		// Default to showing last 10 commands if n is not specified
@@ -1221,6 +1556,7 @@ func main() {
 	case "--rerun":
 		if len(os.Args) < 3 {
 			fmt.Println("Error: --rerun requires a command ID")
+			fmt.Println("Usage: save --rerun <id>")
 			os.Exit(1)
 		}
 		id, err := strconv.Atoi(os.Args[2])
@@ -1248,33 +1584,223 @@ func main() {
 			os.Exit(1)
 		}
 	
-		default:
-			var tags []string
-			var description string
-			var saveDir bool
-			cmdArgs := os.Args[1:]
+	case "--config-path":
+		store, err := NewCommandStore()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Config file location: %s\n", store.filepath)
+	
+	case "--list-chains":
+		if len(store.chains) == 0 {
+			fmt.Println("No command chains found")
+			return
+		}
+		fmt.Println("\nAvailable Command Chains:")
+		for _, chain := range store.chains {
+			fmt.Printf("#%d %s\n", chain.ID, chain.Name)
+			if chain.Description != "" {
+				fmt.Printf("    Description: %s\n", chain.Description)
+			}
+			fmt.Printf("    Steps: %d, Run Count: %d, Success Rate: %.2f%%\n", 
+				len(chain.Steps), chain.RunCount, chain.SuccessRate)
+			fmt.Println()
+		}
 
-			// Parse flags
-			for i := 0; i < len(cmdArgs); i++ {
-				switch cmdArgs[i] {
-				case "--tag":
-					if i+1 < len(cmdArgs) {
-						tags = strings.Split(cmdArgs[i+1], ",")
-						cmdArgs = append(cmdArgs[:i], cmdArgs[i+2:]...)
-						i--
-					}
-				case "--desc":
-					if i+1 < len(cmdArgs) {
-						description = cmdArgs[i+1]
-						cmdArgs = append(cmdArgs[:i], cmdArgs[i+2:]...)
-						i--
-					}
-				case "--dir":
-					saveDir = true
-					cmdArgs = append(cmdArgs[:i], cmdArgs[i+1:]...)
+	case "--create-chain":
+		if len(os.Args) < 4 {
+			fmt.Println("Error: --create-chain requires name and description")
+			fmt.Println("Usage: save --create-chain <name> <description>")
+			os.Exit(1)
+		}
+		
+		chain := CommandChain{
+			Name:        os.Args[2],
+			Description: os.Args[3],
+			CreatedAt:   time.Now(),
+			Steps:       []ChainStep{},
+		}
+		
+		store.lastChainID++
+		chain.ID = store.lastChainID
+		store.chains = append(store.chains, chain)
+		
+		if err := store.save(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating chain: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Created chain #%d: %s\n", chain.ID, chain.Name)
+
+	case "--run-chain":
+		if len(os.Args) < 3 {
+			fmt.Println("Error: --run-chain requires a chain ID")
+			fmt.Println("Usage: save --run-chain <chain-id>")
+			os.Exit(1)
+		}
+		
+		chainID, err := strconv.Atoi(os.Args[2])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: invalid chain ID\n")
+			os.Exit(1)
+		}
+		
+		// Check if --continue-on-error flag is present
+		continueOnError := false
+		if len(os.Args) > 3 && os.Args[3] == "--continue-on-error" {
+			continueOnError = true
+		}
+		
+		if err := store.ExecuteChainWithDependencies(chainID); err != nil {
+			if !continueOnError {
+				fmt.Fprintf(os.Stderr, "Error executing chain: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Fprintf(os.Stderr, "Warning: chain execution had errors: %v\n", err)
+		}
+
+	case "--version":
+		fmt.Printf("save version %s\n", Version)
+		os.Exit(0)
+
+	case "--install-completion":
+		shell := os.Getenv("SHELL")
+		if shell == "" {
+			fmt.Println("Error: Could not detect shell. Please specify: save --generate-completion <bash|zsh>")
+			os.Exit(1)
+		}
+		
+		shellType := filepath.Base(shell) // Gets "bash" or "zsh" from path
+		script := generateShellCompletion(shellType)
+		if script == "" {
+			fmt.Printf("Error: Unsupported shell: %s\n", shellType)
+			os.Exit(1)
+		}
+		
+		// Install to appropriate location based on shell
+		var completionPath string
+		switch shellType {
+		case "bash":
+			completionPath = filepath.Join(os.Getenv("HOME"), ".bash_completion.d", "save")
+		case "zsh":
+			completionPath = filepath.Join(os.Getenv("HOME"), ".zsh/completions", "_save")
+		}
+		
+		// Create directory if it doesn't exist
+		if err := os.MkdirAll(filepath.Dir(completionPath), 0755); err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating completion directory: %v\n", err)
+			os.Exit(1)
+		}
+		
+		if err := os.WriteFile(completionPath, []byte(script), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing completion script: %v\n", err)
+			os.Exit(1)
+		}
+		
+		fmt.Printf("Installed completion script to %s\n", completionPath)
+		fmt.Printf("Add 'source %s' to your shell's rc file\n", completionPath)
+
+	case "--verify":
+		if err := store.verifyIntegrity(); err != nil {
+			fmt.Fprintf(os.Stderr, "Data integrity issues found: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Data integrity verified successfully")
+
+	case "--backup":
+		backupPath := store.filepath + ".backup-" + time.Now().Format("20060102-150405")
+		if err := store.createBackup(backupPath); err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating backup: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Backup created at: %s\n", backupPath)
+
+	case "--repair":
+		if err := store.repairIntegrity(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error repairing data: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Data repair completed successfully")
+		// Run verification after repair
+		if err := store.verifyIntegrity(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: some issues remain after repair: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "--restore":
+		if len(os.Args) < 3 {
+			fmt.Println("Error: --restore requires a backup file path")
+			os.Exit(1)
+		}
+		if err := store.restoreFromBackup(os.Args[2]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error restoring from backup: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Successfully restored from backup")
+
+	case "--list-backups":
+		backupDir := filepath.Join(filepath.Dir(store.filepath), "backups")
+		files, err := os.ReadDir(backupDir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				fmt.Println("No backups found")
+				return
+			}
+			fmt.Fprintf(os.Stderr, "Error reading backup directory: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("Available backups:")
+		for _, file := range files {
+			if !file.IsDir() && strings.HasPrefix(file.Name(), "save-history-") {
+				path := filepath.Join(backupDir, file.Name())
+				info, err := file.Info()
+				if err != nil {
+					continue
+				}
+				fmt.Printf("%s (%s, %d bytes)\n", path, info.ModTime().Format("2006-01-02 15:04:05"), info.Size())
+			}
+		}
+
+	default:
+		var tags []string
+		var description string
+		var saveDir bool
+		cmdArgs := os.Args[1:]
+
+		// Check if the command is just a flag without required arguments
+		if len(cmdArgs) == 1 && validCommandFlags[cmdArgs[0]] {
+			fmt.Fprintf(os.Stderr, "Error: %s requires additional arguments\n", cmdArgs[0])
+			os.Exit(1)
+		}
+
+		// Parse flags
+		for i := 0; i < len(cmdArgs); i++ {
+			switch cmdArgs[i] {
+			case "--tag":
+				if i+1 < len(cmdArgs) {
+					tags = strings.Split(cmdArgs[i+1], ",")
+					cmdArgs = append(cmdArgs[:i], cmdArgs[i+2:]...)
 					i--
 				}
+			case "--desc":
+				if i+1 < len(cmdArgs) {
+					description = cmdArgs[i+1]
+					cmdArgs = append(cmdArgs[:i], cmdArgs[i+2:]...)
+					i--
+				}
+			case "--dir":
+				saveDir = true
+				cmdArgs = append(cmdArgs[:i], cmdArgs[i+1:]...)
+				i--
 			}
+		}
+
+		// Check if the remaining command is just a flag
+		if len(cmdArgs) > 0 && validCommandFlags[cmdArgs[0]] {
+			fmt.Fprintf(os.Stderr, "Error: %s is a command flag and cannot be saved as a command\n", cmdArgs[0])
+			os.Exit(1)
+		}
 
 		cmdString := strings.Join(cmdArgs, " ")
 		if err := store.Execute(cmdString, saveDir, tags, description, 0); err != nil {
@@ -1315,6 +1841,10 @@ func printUsage() {
     fmt.Printf("  %-30s Search commands\n", "--search <query>")
     fmt.Printf("  %-30s Show command statistics\n", "--stats")
     fmt.Printf("  %-30s Re-run command by ID\n", "--rerun <id>")
+    fmt.Printf("  %-30s Mark command as favorite\n", "--favorite <id>")
+    fmt.Printf("  %-30s Remove command(s) by ID(s)\n", "--remove <id1,id2,...>")
+    fmt.Printf("  %-30s Filter commands by directory\n", "--filter-dir <path>")
+    fmt.Printf("  %-30s Show config file location\n", "--config-path")
 
     // Tag Management
     fmt.Printf("\n%sTAG MANAGEMENT:%s\n", bold, reset)
@@ -1343,13 +1873,16 @@ func printUsage() {
     fmt.Printf("  %-30s Import commands from file\n", "--import <filename>")
 
     // Examples Section
-    fmt.Printf("\n%sEXAMPLES:%s\n", bold, reset)
+    fmt.Printf("\n%sEXAMPLES:%s\n", yellow, reset)
     
     fmt.Printf("\n%s  Basic Command Usage:%s\n", yellow, reset)
     fmt.Printf("    save 'echo Hello World'                    # Save and run simple command\n")
     fmt.Printf("    save --desc 'Greeting' 'echo Hello'        # Save with description\n")
     fmt.Printf("    save --tag cli,test 'npm test'            # Save with tags\n")
     fmt.Printf("    save --rerun 42                           # Rerun command #42\n")
+    fmt.Printf("    save --favorite 42                        # Mark command #42 as favorite\n")
+    fmt.Printf("    save --remove 42                          # Remove command #42\n")
+    fmt.Printf("    save --config-path                        # Show config file location\n")
     
     fmt.Printf("\n%s  Command Editing:%s\n", yellow, reset)
     fmt.Printf("    save --interactive-edit 1                  # Edit command interactively\n")
@@ -1362,10 +1895,12 @@ func printUsage() {
     fmt.Printf("    save --run-chain 1                        # Run chain #1\n")
     fmt.Printf("    save --list-chains                        # List all chains\n")
 
-    fmt.Printf("\n%s  Search and Filter:%s\n", yellow, reset)
+    fmt.Printf("\n%s  Filtering and Organization:%s\n", yellow, reset)
     fmt.Printf("    save --search 'git'                       # Search for git commands\n")
     fmt.Printf("    save --filter-tag docker                  # Show docker commands\n")
+    fmt.Printf("    save --filter-dir ~/projects              # Show commands from directory\n")
     fmt.Printf("    save --list-tags                         # Show all tags\n")
+    fmt.Printf("    save --favorite 42                       # Mark command as favorite\n")
 
     fmt.Printf("\n%s  Backup and Stats:%s\n", yellow, reset)
     fmt.Printf("    save --export backup.json                 # Export commands\n")
