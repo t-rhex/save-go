@@ -44,7 +44,7 @@ jobs:
         run: |
           mkdir -p dist
           # Add version info to binaries
-          FLAGS="-ldflags=-X main.Version=${VERSION#v}"
+          FLAGS="-ldflags=\"-X 'main.Version=${VERSION#v}'\""
           BUILDS=(
             "linux/amd64"
             "linux/arm64"
@@ -66,7 +66,7 @@ jobs:
               BINARY="dist/save-${GOOS}-${GOARCH}"
             fi
             
-            GOOS=$GOOS GOARCH=$GOARCH go build $FLAGS -o "$BINARY"
+            GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-X 'main.Version=${VERSION#v}'" -o "$BINARY"
           done
 
       - name: Generate checksums

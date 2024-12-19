@@ -882,6 +882,8 @@ func containsTag(tags []string, query string) bool {
     return false
 }
 
+var Version string // This will be set during build
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
