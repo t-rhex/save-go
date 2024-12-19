@@ -38,20 +38,6 @@ jobs:
           sed -i "s/@v[0-9.]*/@$VERSION/" README.md
           sed -i "s/Version: v[0-9.]*)/Version: $VERSION)/" README.md
 
-          # Add build status to README if not present
-          if ! grep -q "Build Status" README.md; then
-            sed -i "1i\\
-            [![Build Status](https://github.com/t-rhex/save-go/actions/workflows/build.yml/badge.svg)](https://github.com/t-rhex/save-go/actions/workflows/build.yml)\\
-            " README.md
-          fi
-
-          # Add Go Report Card if not present
-          if ! grep -q "Go Report Card" README.md; then
-            sed -i "1i\\
-            [![Go Report Card](https://goreportcard.com/badge/github.com/t-rhex/save-go)](https://goreportcard.com/report/github.com/t-rhex/save-go)\\
-            " README.md
-          fi
-
       - name: Build binaries
         run: |
           mkdir -p dist
