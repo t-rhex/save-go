@@ -38,7 +38,7 @@
 Clone the repository:
 
 ```bash
-git clone https://github.com/[your-username]/save.git
+git clone https://github.com/t-rhex/save-go.git
 cd save
 ```
 
