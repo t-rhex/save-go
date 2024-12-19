@@ -25,34 +25,38 @@ clean:
 # System-wide installation (requires sudo)
 install: build
 	sudo install -d /usr/local/bin
-	sudo install -m 755 $(BINARY) /usr/local/bin
+	sudo install -m 755 ./$(BINARY) /usr/local/bin/$(BINARY)
 	@echo "Installing shell completion..."
 	sudo mkdir -p /etc/bash_completion.d
-	sudo $(BINARY) --generate-completion bash > /etc/bash_completion.d/save
+	sudo ./$(BINARY) --generate-completion bash > /etc/bash_completion.d/$(BINARY)
 	sudo mkdir -p /usr/local/share/zsh/site-functions
-	sudo $(BINARY) --generate-completion zsh > /usr/local/share/zsh/site-functions/_save
+	sudo ./$(BINARY) --generate-completion zsh > /usr/local/share/zsh/site-functions/_$(BINARY)
 	@echo "Installation complete. You may need to restart your shell."
 
 # User-specific installation (no sudo required)
 user-install: build
 	@mkdir -p $(INSTALL_PATH)
-	@install -m 755 $(BINARY) $(INSTALL_PATH)
+	@install -m 755 ./$(BINARY) $(INSTALL_PATH)/$(BINARY)
 	@mkdir -p $(HOME)/.bash_completion.d
-	@$(BINARY) --generate-completion bash > $(HOME)/.bash_completion.d/save
+	@./$(BINARY) --generate-completion bash > $(HOME)/.bash_completion.d/$(BINARY)
 	@mkdir -p $(HOME)/.zsh/completion
-	@$(BINARY) --generate-completion zsh > $(HOME)/.zsh/completion/_save
+	@./$(BINARY) --generate-completion zsh > $(HOME)/.zsh/completion/_$(BINARY)
 	@echo "Installation complete."
 	@echo "Please make sure $(INSTALL_PATH) is in your PATH."
 	@echo "Add this to your .bashrc or .zshrc if it isn't already there:"
 	@echo "export PATH=\"$(INSTALL_PATH):\$$PATH\""
 	@echo ""
 	@echo "For bash completion, add this to your .bashrc:"
-	@echo "[[ -f $(HOME)/.bash_completion.d/save ]] && . $(HOME)/.bash_completion.d/save"
+	@echo "[[ -f $(HOME)/.bash_completion.d/$(BINARY) ]] && . $(HOME)/.bash_completion.d/$(BINARY)"
 	@echo ""
 	@echo "For zsh completion, add this to your .zshrc:"
 	@echo "fpath=($(HOME)/.zsh/completion \$$fpath)"
+	@echo ""
+	@echo "You may need to restart your shell or run:"
+	@echo "export PATH=\"$(INSTALL_PATH):\$$PATH\""
+	@echo "to use the command immediately"
 
 uninstall:
 	rm -f $(INSTALL_PATH)/$(BINARY)
-	rm -f $(HOME)/.bash_completion.d/save
-	rm -f $(HOME)/.zsh/completion/_save
+	rm -f $(HOME)/.bash_completion.d/$(BINARY)
+	rm -f $(HOME)/.zsh/completion/_$(BINARY)
