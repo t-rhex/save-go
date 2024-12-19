@@ -13,20 +13,22 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: main
           token: ${{ secrets.WORKFLOW_TOKEN }}
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: "1.21"
+          cache: true
 
       - name: Update version in files
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
           # Update version in main.go
           sed -i "s/Version = \".*\"/Version = \"${VERSION#v}\"/" main.go
@@ -36,45 +38,92 @@ jobs:
 
           # Update version and badges in README.md
           sed -i "s/@v[0-9.]*/@$VERSION/" README.md
-          sed -i "s/Version: v[0-9.]*)/Version: $VERSION)/" README.md
+          sed -i "s/version-[0-9.]*-blue/version-${VERSION#v}-blue/" README.md
 
       - name: Build binaries
         run: |
           mkdir -p dist
-          GOOS=linux GOARCH=amd64 go build -o dist/save-linux-amd64
-          GOOS=darwin GOARCH=amd64 go build -o dist/save-darwin-amd64
-          GOOS=darwin GOARCH=arm64 go build -o dist/save-darwin-arm64
-          GOOS=windows GOARCH=amd64 go build -o dist/save-windows-amd64.exe
-
-      - name: Run tests
-        run: go test -v ./...
+          # Add version info to binaries
+          FLAGS="-ldflags=-X main.Version=${VERSION#v}"
+          BUILDS=(
+            "linux/amd64"
+            "linux/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+            "windows/amd64"
+          )
+          
+          for build in "${BUILDS[@]}"; do
+            IFS='/' read -r -a parts <<< "$build"
+            GOOS="${parts[0]}"
+            GOARCH="${parts[1]}"
+            
+            echo "Building for $GOOS/$GOARCH..."
+            
+            if [ "$GOOS" = "windows" ]; then
+              BINARY="dist/save-${GOOS}-${GOARCH}.exe"
+            else
+              BINARY="dist/save-${GOOS}-${GOARCH}"
+            fi
+            
+            GOOS=$GOOS GOARCH=$GOARCH go build $FLAGS -o "$BINARY"
+          done
 
       - name: Generate checksums
+        working-directory: dist
         run: |
-          cd dist
+          echo "Generating SHA256 checksums..."
           sha256sum * > checksums.txt
+          echo "Generating SHA512 checksums..."
+          sha512sum * > checksums.sha512
 
       - name: Update CHANGELOG.md
         run: |
-          echo -e "\n## [${GITHUB_REF#refs/tags/}] - $(date +%Y-%m-%d)\n" >> CHANGELOG.md
-          git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"- %s" >> CHANGELOG.md
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -n "$PREV_TAG" ]; then
+            echo "Generating changelog since $PREV_TAG"
+            CHANGES=$(git log "$PREV_TAG"..HEAD --pretty=format:"- %s" --no-merges)
+          else
+            echo "No previous tag found, including all commits"
+            CHANGES=$(git log --pretty=format:"- %s" --no-merges)
+          fi
+          
+          # Create new changelog entry
+          {
+            echo -e "\n## [${VERSION}] - $(date +%Y-%m-%d)\n"
+            echo "### Changes"
+            echo "$CHANGES"
+            echo
+            cat CHANGELOG.md
+          } > CHANGELOG.tmp
+          mv CHANGELOG.tmp CHANGELOG.md
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
         with:
           files: |
             dist/*
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
           generate_release_notes: true
           body_path: CHANGELOG.md
+          fail_on_unmatched_files: true
 
       - name: Commit version updates
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add main.go Makefile README.md CHANGELOG.md
-          git commit -m "chore: Update version to ${GITHUB_REF#refs/tags/}"
+          git commit -m "chore: Update version to ${VERSION}"
           git push origin main
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: dist/*
+          retention-days: 5

@@ -12,7 +12,12 @@ else
     INSTALL_PATH := $(HOME)/.local/bin
 endif
 
-.PHONY: all build clean install uninstall user-install
+.PHONY: all build clean install uninstall user-install update dev
+
+# TODO: Add test target once tests are implemented
+# .PHONY: test
+# test:
+#   go test -v ./...
 
 all: build
 
@@ -56,13 +61,20 @@ user-install: build
 	@echo "export PATH=\"$(INSTALL_PATH):\$$PATH\""
 	@echo "to use the command immediately"
 
-.PHONY: update
+# Update existing installation
 update: build
-    @echo "Updating save to version $(VERSION)..."
-    @$(MAKE) uninstall
-    @$(MAKE) user-install
+	@echo "Updating $(BINARY) to version $(VERSION)..."
+	@$(MAKE) uninstall
+	@$(MAKE) user-install
+	@echo "Update complete!"
 
 uninstall:
 	rm -f $(INSTALL_PATH)/$(BINARY)
 	rm -f $(HOME)/.bash_completion.d/$(BINARY)
 	rm -f $(HOME)/.zsh/completion/_$(BINARY)
+
+# Development helpers
+dev: build
+	@./$(BINARY)
+
+.DEFAULT_GOAL := all
