@@ -2,6 +2,27 @@
 ## [v0.1.0] - 2024-12-19
 
 ### Changes
+- Fix: Shell command fix
+- Update install.sh
+- chore: Update version to v0.1.0
+- Fix: Workflow fix
+- Feature: improve documentation and added a single installation script
+-  Feature: new filter features
+-  Fix: Makefile fix
+- chore: Update version to v0.1.0
+-  Fix: Makefile run without sudo
+-  Fix: Makefile run without sudo
+- chore: Update version to v0.1.0
+-  Fix: Workflow fix
+-  Feature: New workflow
+-  Minor fixes
+- Initial commit
+- Initial commit
+
+
+## [v0.1.0] - 2024-12-19
+
+### Changes
 - Fix: Workflow fix
 - Feature: improve documentation and added a single installation script
 -  Feature: new filter features
