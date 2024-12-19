@@ -56,6 +56,12 @@ user-install: build
 	@echo "export PATH=\"$(INSTALL_PATH):\$$PATH\""
 	@echo "to use the command immediately"
 
+.PHONY: update
+update: build
+    @echo "Updating save to version $(VERSION)..."
+    @$(MAKE) uninstall
+    @$(MAKE) user-install
+
 uninstall:
 	rm -f $(INSTALL_PATH)/$(BINARY)
 	rm -f $(HOME)/.bash_completion.d/$(BINARY)

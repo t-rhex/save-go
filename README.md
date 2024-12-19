@@ -1,8 +1,6 @@
-  [![Go Report Card](https://goreportcard.com/badge/github.com/t-rhex/save-go)](https://goreportcard.com/report/github.com/t-rhex/save-go)
-  
-  [![Build Status](https://github.com/t-rhex/save-go/actions/workflows/build.yml/badge.svg)](https://github.com/t-rhex/save-go/actions/workflows/build.yml)
-  
 # save - Command History Manager
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/t-rhex/save-go)](https://goreportcard.com/report/github.com/t-rhex/save-go)
 
 **save** is a powerful command-line tool that helps developers track, manage, and reuse their shell commands with additional context and organization features. It's designed to be a more intelligent alternative to basic shell history, offering tagging, searching, and analytics capabilities.
 
@@ -14,164 +12,152 @@
 - **Directory Tracking**: Option to save working directory context with commands
 - **Tags & Descriptions**: Add metadata to commands for better organization
 - **Favorites**: Mark frequently used commands for quick access
+- **Interactive Editing**: Edit commands and metadata through an interactive interface
+- **Command Chains**: Create and execute sequences of dependent commands
+- **Undo Support**: Revert changes to commands and metadata
 
-### Command Management
+### Advanced Features
 
-- **Listing**: View command history with context
-- **Search**: Find commands by content, tags, or description
-- **Directory Filtering**: Filter commands by working directory
-- **Command Removal**: Delete specific commands from history
-- **Export**: Backup or share your command history
+#### Command Chains
 
-### 📊 Analytics
+- Create complex command sequences with dependencies
+- Support for parallel execution
+- Conditional execution based on success/failure
+- Time-based execution windows
+- Environmental condition checks
+
+#### Analytics & Insights
 
 - **Usage Statistics**: Track command success rates and patterns
 - **Most Used Commands**: See your most frequently used commands
 - **Tag Analytics**: Identify most common command categories
 - **Success Rate**: Monitor command reliability
+- **Chain Performance**: Track chain execution success rates
+- **Time-based Analytics**: Analyze command usage patterns over time
 
-### 🐚 Shell Integration
+## 📦 Installation
 
-- **Shell Completion**: Supports both Bash and Zsh completion
-- **Directory Awareness**: Maintains working directory context
+### Homebrew (macOS and Linux) - Coming soon
 
-## Installation
+```bash
+brew install t-rhex/tap/save
+```
 
 ### From Source
 
-Clone the repository:
-
 ```bash
 git clone https://github.com/t-rhex/save-go.git
-cd save
+cd save-go
+make user-install
 ```
 
-Install:
+### Update
 
 ```bash
-sudo make install
+git pull
+make update
 ```
 
-This will install the binary and shell completions.
+## 💻 Usage
 
-### Uninstall
-
-```bash
-sudo make uninstall
-```
-
-## Usage
-
-### Command Examples
+### Basic Command Management
 
 ```bash
-# Save a command with tags
-save --tag git,prod 'git push'
+# Save and execute a command
+save 'echo "Hello World"'
 
-# Save a command with description
-save --desc 'Deploy to production' './deploy.sh'
+# Save with tags and description
+save --tag 'docker,prod' --desc 'Start production container' 'docker-compose up'
 
-# Save a command with current directory
+# Save with current directory context
 save --dir 'npm start'
-
-# List recent commands
-save --list
-
-# Search commands
-save --search "git"
-
-# Show statistics
-save --stats
-
-# Re-run a command by ID
-save --rerun 42
-
-# Mark a command as favorite
-save --favorite 42
 ```
 
-### Command Management
+### Advanced Features
+
+#### Command Chains
 
 ```bash
-# List last 10 commands
-save --list
+# Create a deployment chain
+save --create-chain 'deploy' 'Deployment process' steps.json deps.json
 
-# List specific number of commands
-save --list 20
+# Run a chain
+save --run-chain 1
 
+# List all chains
+save --list-chains
+```
+
+#### Interactive Editing
+
+```bash
+# Edit command interactively
+save --interactive-edit 42
+
+# Add/remove tags
+save --add-tags 42 'git,prod'
+save --remove-tags 42 'prod'
+
+# Undo last edit
+save --undo 42
+```
+
+#### Search and Filter
+
+```bash
 # Search commands
 save --search "git"
+
+# Filter by tag
+save --filter-tag "docker"
 
 # Filter by directory
 save --filter-dir "/path/to/project"
+```
 
-# Remove a command
-save --remove 42
+#### Analytics
+
+```bash
+# View general statistics
+save --stats
+
+# View tag usage
+save --list-tags
 
 # Export command history
-save --export backup.json
+save --export history.json
 ```
 
-### Metadata Management
+## 🔧 Configuration
+
+### Shell Integration
+
+Shell completion scripts are automatically installed for bash and zsh.
+
+#### Manual Shell Completion Setup
 
 ```bash
-# Mark command as favorite
-save --favorite 42
+# Bash
+echo 'source ~/.bash_completion.d/save' >> ~/.bashrc
 
-# Add tags to existing command
-save --tag deploy,production 42
-
-# Add/update description
-save --desc "Important deployment script" 42
+# Zsh
+echo 'fpath=(~/.zsh/completion $fpath)' >> ~/.zshrc
 ```
 
-### Statistics
+## 🤝 Contributing
 
-```bash
-# View command statistics
-save --stats
-```
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
-### Shell Completion
+## 📄 License
 
-```bash
-# Generate shell completion
-save --generate-completion bash > ~/.bash_completion.d/save
-save --generate-completion zsh > ~/.zsh_completion.d/save
-```
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-### Shell Completion
+## 🙏 Acknowledgments
 
-Shell completion scripts are automatically installed for bash and zsh during installation. You may need to restart your shell for completions to take effect.
-
-## 🤔 Why Use save?
-
-### Context Preservation
-
-- Maintains working directory context
-- Supports tags and descriptions
-- Helps remember command purpose and category
-
-### Intelligent Organization
-
-- Tag-based categorization
-- Searchable descriptions
-- Directory-aware command tracking
-
-### Analytics and Insights
-
-- Track command success rates
-- Identify frequently used commands
-- Analyze command patterns
-
-### Improved Productivity
-
-- Quick command reuse
-- Easy access to command history
-- Smart searching and filtering
-
-### Team Collaboration
-
-- Shareable command history
-- Documented command context
-- Exportable configurations
+- Inspired by shell history management tools
+- Built with Go's robust standard library
+- Community feedback and contributions
