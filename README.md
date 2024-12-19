@@ -11,11 +11,19 @@
 ### Prerequisites
 - Go 1.21 or higher
 - Git
-- Make
+- Make (for Unix/Linux/macOS)
 
-### One-Line Install (Linux/macOS)
+### One-Line Installation
+
+#### Linux/macOS
 ```bash
 curl -sSL https://raw.githubusercontent.com/t-rhex/save-go/main/install.sh | bash
+```
+
+#### Windows (PowerShell)
+```powershell
+# Run as administrator
+Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/t-rhex/save-go/main/install.ps1')
 ```
 
 ### Manual Installation
@@ -28,6 +36,7 @@ cd save-go
 
 2. Choose Installation Method:
 
+#### Unix/Linux/macOS:
 **User Installation** (Recommended, no sudo required):
 ```bash
 make user-install
@@ -38,7 +47,26 @@ make user-install
 make install
 ```
 
+#### Windows:
+```powershell
+# Build
+go build -o save.exe
+
+# Copy to a directory in your PATH (e.g., %USERPROFILE%\AppData\Local\save)
+$installPath = "$env:USERPROFILE\AppData\Local\save"
+New-Item -ItemType Directory -Force -Path $installPath
+Copy-Item save.exe -Destination "$installPath\save.exe"
+
+# Add to PATH if not already there
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if ($userPath -notlike "*$installPath*") {
+    [Environment]::SetEnvironmentVariable("Path", "$userPath;$installPath", "User")
+}
+```
+
 3. Add to Shell (if using user installation):
+
+#### Unix/Linux/macOS:
 ```bash
 # For Bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
@@ -49,9 +77,28 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 echo 'fpath=(~/.zsh/completion $fpath)' >> ~/.zshrc
 ```
 
+#### Windows (PowerShell):
+```powershell
+# Add to PowerShell profile
+if (!(Test-Path $PROFILE)) { New-Item -Type File -Force $PROFILE }
+Add-Content $PROFILE "`$env:Path = [Environment]::GetEnvironmentVariable('Path', 'User')"
+
+# Setup completion
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\Documents\WindowsPowerShell\Completions"
+save --generate-completion powershell > "$env:USERPROFILE\Documents\WindowsPowerShell\Completions\save.ps1"
+```
+
 4. Reload Shell:
+
+#### Unix/Linux/macOS:
 ```bash
 source ~/.bashrc  # or source ~/.zshrc for Zsh
+```
+
+#### Windows:
+```powershell
+# Reload PATH
+$env:Path = [Environment]::GetEnvironmentVariable("Path", "User")
 ```
 
 ## 🚀 Quick Start
@@ -145,11 +192,21 @@ SAVE_NO_COLOR      # Disable color output
 
 ## 🔄 Updates
 
+### Unix/Linux/macOS:
 ```bash
 # Update to latest version
 cd save-go
 git pull
 make update
+```
+
+### Windows:
+```powershell
+# Update to latest version
+cd save-go
+git pull
+go build -o save.exe
+Copy-Item save.exe -Destination "$env:USERPROFILE\AppData\Local\save\save.exe" -Force
 ```
 
 ## 🐛 Troubleshooting
