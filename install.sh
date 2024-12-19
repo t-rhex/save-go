@@ -9,6 +9,16 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Helper functions
+get_latest_version() {
+    curl --silent "https://api.github.com/repos/$REPO/releases/latest" | 
+    grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/' || echo ""
+}
+
+version_gt() {
+    test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"
+}
+
 # Version to install (can be overridden by environment variable)
 VERSION=${VERSION:-$(get_latest_version)}
 if [ -z "$VERSION" ]; then
