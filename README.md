@@ -1,3 +1,7 @@
+  [![Go Report Card](https://goreportcard.com/badge/github.com/t-rhex/save-go)](https://goreportcard.com/report/github.com/t-rhex/save-go)
+  
+  [![Build Status](https://github.com/t-rhex/save-go/actions/workflows/build.yml/badge.svg)](https://github.com/t-rhex/save-go/actions/workflows/build.yml)
+  
 # save - Command History Manager
 
 **save** is a powerful command-line tool that helps developers track, manage, and reuse their shell commands with additional context and organization features. It's designed to be a more intelligent alternative to basic shell history, offering tagging, searching, and analytics capabilities.
