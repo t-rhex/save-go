@@ -19,3 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shell completion for bash and zsh
 - Favorite command marking
 - Command removal
+
+## [v0.1.0] - 2024-12-19
+
