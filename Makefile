@@ -1,8 +1,8 @@
-VERSION := $(shell git describe --tags --always --dirty)
+VERSION := 0.1.0
 BINARY := save
 GOFILES := $(wildcard *.go)
 DEV_BINARY := $(BINARY)-dev
-DEV_VERSION := $(VERSION)-dev
+DEV_VERSION := 0.1.0
 DEV_CONFIG_PATH := $(HOME)/.config/save-dev
 
 # Check if running on macOS or Linux
