@@ -8,11 +8,11 @@ DEV_CONFIG_PATH := $(HOME)/.config/save-dev
 # Check if running on macOS or Linux
 UNAME := $(shell uname)
 
-# Default to user's home directory for installation
+# Default installation path (can be overridden)
 ifeq ($(UNAME), Darwin)
-    INSTALL_PATH := $(HOME)/bin
+    INSTALL_PATH ?= $(HOME)/bin
 else
-    INSTALL_PATH := $(HOME)/.local/bin
+    INSTALL_PATH ?= $(HOME)/.local/bin
 endif
 
 LDFLAGS := -X main.Version=$(VERSION)
@@ -31,6 +31,7 @@ help:
 	@echo "  build          - Build the application"
 	@echo "  build-dev      - Build the application with debug information"
 	@echo "  clean          - Remove built binaries"
+	@echo "  clean-all      - Remove binaries and all config files"
 	@echo "  install        - Install system-wide (requires sudo)"
 	@echo "  user-install   - Install for current user only"
 	@echo "  uninstall      - Remove the application"
@@ -49,12 +50,33 @@ build: $(GOFILES)
 build-dev: $(GOFILES)
 	@mkdir -p $(DEV_CONFIG_PATH)
 	@echo "Building development version with config path: $(DEV_CONFIG_PATH)"
-	go build -ldflags "$(DEV_LDFLAGS)" -gcflags="all=-N -l" -o $(DEV_BINARY)
+	go build -ldflags "-X main.Version=$(DEV_VERSION) -X main.ConfigPath=$(DEV_CONFIG_PATH)" -gcflags="all=-N -l" -o $(DEV_BINARY)
 
 clean:
 	rm -f $(BINARY)
 	rm -f $(DEV_BINARY)
-	@echo "Note: Development config directory $(DEV_CONFIG_PATH) is preserved"
+	@echo "Note: Config files are preserved at:"
+	@echo "  - Production: $(HOME)/.save_history.json"
+	@echo "  - Development: $(DEV_CONFIG_PATH)/history.json"
+
+clean-all: clean
+	@echo "Removing all config files..."
+	rm -f $(HOME)/.save_history.json
+	rm -rf $(DEV_CONFIG_PATH)
+	@# Remove shell configurations
+	@SHELL_TYPE=$$(basename $$SHELL); \
+	if [ "$$SHELL_TYPE" = "bash" ]; then \
+		sed -i.bak '/# Added by save installer/,+1d' $(HOME)/.bashrc; \
+		rm -f $(HOME)/.bash_completion.d/$(BINARY); \
+		echo "Cleaned up bash configuration"; \
+	elif [ "$$SHELL_TYPE" = "zsh" ]; then \
+		sed -i.bak '/# Added by save installer/,+1d' $(HOME)/.zshrc; \
+		rm -f $(HOME)/.zsh/completion/_$(BINARY); \
+		echo "Cleaned up zsh configuration"; \
+	fi
+	@# Remove backup files
+	rm -f $(HOME)/.bashrc.bak $(HOME)/.zshrc.bak
+	@echo "All config files removed"
 
 test:
 	go test -v ./...
@@ -78,20 +100,32 @@ user-install: build
 	@./$(BINARY) --generate-completion bash > $(HOME)/.bash_completion.d/$(BINARY)
 	@mkdir -p $(HOME)/.zsh/completion
 	@./$(BINARY) --generate-completion zsh > $(HOME)/.zsh/completion/_$(BINARY)
+	@# Setup shell completion and PATH
+	@SHELL_TYPE=$$(basename $$SHELL); \
+	if [ "$$SHELL_TYPE" = "bash" ]; then \
+		if ! grep -q "$(HOME)/.bash_completion.d/$(BINARY)" "$(HOME)/.bashrc"; then \
+			echo "[ -f $(HOME)/.bash_completion.d/$(BINARY) ] && . $(HOME)/.bash_completion.d/$(BINARY)" >> "$(HOME)/.bashrc"; \
+			echo "Added bash completion to .bashrc"; \
+		fi; \
+		if ! grep -q "export PATH=\"$(INSTALL_PATH):\$$PATH\"" "$(HOME)/.bashrc"; then \
+			echo "export PATH=\"$(INSTALL_PATH):\$$PATH\"" >> "$(HOME)/.bashrc"; \
+			echo "Added $(INSTALL_PATH) to PATH in .bashrc"; \
+		fi; \
+	elif [ "$$SHELL_TYPE" = "zsh" ]; then \
+		if ! grep -q "fpath=($(HOME)/.zsh/completion" "$(HOME)/.zshrc"; then \
+			echo "fpath=($(HOME)/.zsh/completion \$$fpath)" >> "$(HOME)/.zshrc"; \
+			echo "autoload -U compinit && compinit" >> "$(HOME)/.zshrc"; \
+			echo "Added zsh completion to .zshrc"; \
+		fi; \
+		if ! grep -q "export PATH=\"$(INSTALL_PATH):\$$PATH\"" "$(HOME)/.zshrc"; then \
+			echo "export PATH=\"$(INSTALL_PATH):\$$PATH\"" >> "$(HOME)/.zshrc"; \
+			echo "Added $(INSTALL_PATH) to PATH in .zshrc"; \
+		fi; \
+	fi
 	@echo "Installation complete."
-	@echo "Please make sure $(INSTALL_PATH) is in your PATH."
-	@echo "Add this to your .bashrc or .zshrc if it isn't already there:"
-	@echo "export PATH=\"$(INSTALL_PATH):\$$PATH\""
-	@echo ""
-	@echo "For bash completion, add this to your .bashrc:"
-	@echo "[[ -f $(HOME)/.bash_completion.d/$(BINARY) ]] && . $(HOME)/.bash_completion.d/$(BINARY)"
-	@echo ""
-	@echo "For zsh completion, add this to your .zshrc:"
-	@echo "fpath=($(HOME)/.zsh/completion \$$fpath)"
-	@echo ""
-	@echo "You may need to restart your shell or run:"
-	@echo "export PATH=\"$(INSTALL_PATH):\$$PATH\""
-	@echo "to use the command immediately"
+	@echo "To use save in current session, run:"
+	@echo "  export PATH=\"$(INSTALL_PATH):\$$PATH\""
+	@echo "Or start a new terminal session."
 
 # Update existing installation
 update: build

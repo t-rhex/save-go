@@ -145,6 +145,21 @@ restore_on_failure() {
 install_save() {
     info "Installing save version $VERSION..."
     
+    # Set install path based on installation type
+    if [ "$INSTALL_TYPE" = "system" ]; then
+        if [ "$(id -u)" -ne 0 ]; then
+            error "System-wide installation requires root privileges. Please run with sudo or use INSTALL_TYPE=user"
+        fi
+        INSTALL_PATH="/usr/local/bin"
+    else
+        # Set user install path based on platform
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            INSTALL_PATH="$HOME/bin"
+        else
+            INSTALL_PATH="$HOME/.local/bin"
+        fi
+    fi
+    
     # Backup before installation
     local timestamp=$(date +%Y%m%d_%H%M%S)
     backup_config
@@ -166,13 +181,9 @@ install_save() {
     # Build and install
     info "Building and installing..."
     if [ "$INSTALL_TYPE" = "system" ]; then
-        if [ "$(id -u)" -ne 0 ]; then
-            error "System-wide installation requires root privileges. Please run with sudo or use INSTALL_TYPE=user"
-        fi
         make install
-        INSTALL_PATH="/usr/local/bin"  # Update install path for system install
     else
-        make user-install
+        make user-install INSTALL_PATH="$INSTALL_PATH"
     fi
     
     # Check installation success and restore on failure
@@ -183,35 +194,48 @@ install_save() {
 
 # Setup shell integration
 setup_shell() {
-    info "Setting up shell integration..."
-    
-    # Detect shell
-    SHELL_TYPE=$(basename "$SHELL")
-    
-    case "$SHELL_TYPE" in
-        "bash")
-            if ! grep -q "PATH=\"$INSTALL_PATH:\$PATH\"" "$HOME/.bashrc"; then
-                echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-            fi
-            if ! grep -q "bash_completion.d/save" "$HOME/.bashrc"; then
-                echo '[[ -f ~/.bash_completion.d/save ]] && . ~/.bash_completion.d/save' >> "$HOME/.bashrc"
-            fi
-            success "Added Bash configuration"
+    # Detect current shell and set RC file
+    case "$SHELL" in
+        */zsh)
+            SHELL_RC="$HOME/.zshrc"
             ;;
-        "zsh")
-            if ! grep -q "PATH=\"$INSTALL_PATH:\$PATH\"" "$HOME/.zshrc"; then
-                echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
+        */bash)
+            SHELL_RC="$HOME/.bashrc"
+            # For macOS, also check .bash_profile
+            if [[ "$OSTYPE" == "darwin"* ]] && [ -f "$HOME/.bash_profile" ]; then
+                SHELL_RC="$HOME/.bash_profile"
             fi
-            if ! grep -q "fpath=(~/.zsh/completion" "$HOME/.zshrc"; then
-                echo 'fpath=(~/.zsh/completion $fpath)' >> "$HOME/.zshrc"
-            fi
-            success "Added Zsh configuration"
             ;;
         *)
-            warn "Unknown shell type: $SHELL_TYPE"
-            warn "Please manually add $INSTALL_PATH to your PATH"
+            warn "Unsupported shell: $SHELL. Please manually add $INSTALL_PATH to your PATH"
+            return
             ;;
     esac
+
+    info "Updating $SHELL_RC..."
+    
+    # Use the INSTALL_PATH that was set during installation
+    if [ "$INSTALL_TYPE" = "system" ]; then
+        # System installations don't need PATH modification as /usr/local/bin is usually in PATH
+        info "System installation: /usr/local/bin is typically already in PATH"
+        return
+    fi
+    
+    # Create bin directory if it doesn't exist
+    mkdir -p "$INSTALL_PATH"
+    
+    # Add PATH to shell RC if not already present
+    if ! grep -q "export PATH=\"$INSTALL_PATH:\$PATH\"" "$SHELL_RC"; then
+        echo -e "\n# Added by save installer" >> "$SHELL_RC"
+        echo "export PATH=\"$INSTALL_PATH:\$PATH\"" >> "$SHELL_RC"
+        success "Updated $SHELL_RC with PATH"
+    else
+        info "PATH already configured in $SHELL_RC"
+    fi
+    
+    # Source the RC file
+    info "To use 'save' command immediately, run:"
+    echo "    source $SHELL_RC"
 }
 
 # Main installation process
@@ -229,7 +253,12 @@ main() {
     echo
     info "To start using save, either:"
     echo "  1. Restart your terminal"
-    echo "  2. Or run: source ~/.${SHELL_TYPE}rc"
+    if [ "$SHELL_TYPE" = "bash" ]; then
+        echo "  2. Or run: source ~/.bashrc"
+    elif [ "$SHELL_TYPE" = "zsh" ]; then
+        echo "  2. Or run: source ~/.zshrc"
+    fi
+    
     echo
     info "Get started with: save --help"
 }
