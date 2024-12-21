@@ -141,6 +141,12 @@ function Install-Save {
         [string]$Version = $script:Version
     )
     
+    # Add version detection here
+    if ($Version -eq "latest") {
+        $Version = Get-LatestVersion
+        Write-Info "Latest version is: $Version"
+    }
+    
     Write-Info "Installing save version $Version..."
     
     # Create temporary directory
