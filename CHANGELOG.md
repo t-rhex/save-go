@@ -1,3 +1,10 @@
+
+## [v0.1.1] - 2024-12-21
+
+### Changes
+- Fix: Fix config issues and add new feture flag. (#6)
+- chore: Update version to v0.1.0
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
