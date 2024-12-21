@@ -57,8 +57,17 @@ function Setup-Directories {
 function Setup-ShellEnvironment {
     Write-Info "Setting up shell environment..."
     
-    # Set install path
-    $InstallPath = Join-Path $env:USERPROFILE "bin"
+    # Set install path based on installation type
+    if ($InstallType -eq "system") {
+        if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+            Write-Error "System-wide installation requires Administrator privileges. Please run as Administrator or use user installation."
+            exit 1
+        }
+        $InstallPath = "C:\Program Files\save"
+    } else {
+        # User installation path
+        $InstallPath = Join-Path $env:USERPROFILE "bin"
+    }
     
     # Create bin directory if it doesn't exist
     if (-not (Test-Path $InstallPath)) {
@@ -66,7 +75,11 @@ function Setup-ShellEnvironment {
     }
     
     # Get the current user's PATH from the registry
-    $RegPath = 'Registry::HKEY_CURRENT_USER\Environment'
+    if ($InstallType -eq "system") {
+        $RegPath = 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment'
+    } else {
+        $RegPath = 'Registry::HKEY_CURRENT_USER\Environment'
+    }
     $CurrentPath = (Get-ItemProperty -Path $RegPath -Name PATH).Path
     
     # Check if our install path is already in PATH
@@ -101,18 +114,24 @@ function Setup-ShellEnvironment {
     }
     
     # Add completion script to profile if not already present
+    $CompletionScript = & "$InstallPath\save.exe" --generate-completion powershell
+    $CompletionFile = Join-Path $CompletionPath "save.ps1"
+    Set-Content -Path $CompletionFile -Value $CompletionScript
+    
+    # Add to PowerShell profile
+    if (-not (Test-Path $PROFILE)) {
+        New-Item -ItemType File -Force -Path $PROFILE | Out-Null
+    }
+    
     $ProfileContent = @"
 
 # Added by save installer
-`$CompletionPath = Join-Path '$(Split-Path $PROFILE)' 'Completions'
-if (Test-Path `$CompletionPath) {
-    Get-ChildItem `$CompletionPath -Filter *.ps1 | ForEach-Object { . `$_.FullName }
-}
+Import-Module "$CompletionFile"
 "@
     
-    if (-not (Test-Path $PROFILE) -or -not (Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue) -like "*Added by save installer*") {
+    if (-not (Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue) -like "*Added by save installer*") {
         Add-Content -Path $PROFILE -Value $ProfileContent
-        Write-Success "Updated PowerShell profile with completion scripts"
+        Write-Success "Added completion to PowerShell profile"
     }
 }
 

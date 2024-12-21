@@ -145,8 +145,20 @@ restore_on_failure() {
 install_save() {
     info "Installing save version $VERSION..."
     
-    # Set install path
-    INSTALL_PATH="/Users/$(whoami)/bin"
+    # Set install path based on installation type
+    if [ "$INSTALL_TYPE" = "system" ]; then
+        if [ "$(id -u)" -ne 0 ]; then
+            error "System-wide installation requires root privileges. Please run with sudo or use INSTALL_TYPE=user"
+        fi
+        INSTALL_PATH="/usr/local/bin"
+    else
+        # Set user install path based on platform
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            INSTALL_PATH="$HOME/bin"
+        else
+            INSTALL_PATH="$HOME/.local/bin"
+        fi
+    fi
     
     # Backup before installation
     local timestamp=$(date +%Y%m%d_%H%M%S)
@@ -169,13 +181,9 @@ install_save() {
     # Build and install
     info "Building and installing..."
     if [ "$INSTALL_TYPE" = "system" ]; then
-        if [ "$(id -u)" -ne 0 ]; then
-            error "System-wide installation requires root privileges. Please run with sudo or use INSTALL_TYPE=user"
-        fi
         make install
-        INSTALL_PATH="/usr/local/bin"  # Update install path for system install
     else
-        make user-install
+        make user-install INSTALL_PATH="$INSTALL_PATH"
     fi
     
     # Check installation success and restore on failure
@@ -206,8 +214,12 @@ setup_shell() {
 
     info "Updating $SHELL_RC..."
     
-    # Set install path
-    INSTALL_PATH="/Users/$(whoami)/bin"
+    # Use the INSTALL_PATH that was set during installation
+    if [ "$INSTALL_TYPE" = "system" ]; then
+        # System installations don't need PATH modification as /usr/local/bin is usually in PATH
+        info "System installation: /usr/local/bin is typically already in PATH"
+        return
+    fi
     
     # Create bin directory if it doesn't exist
     mkdir -p "$INSTALL_PATH"
@@ -241,7 +253,12 @@ main() {
     echo
     info "To start using save, either:"
     echo "  1. Restart your terminal"
-    echo "  2. Or run: source ~/.${SHELL_TYPE}rc"
+    if [ "$SHELL_TYPE" = "bash" ]; then
+        echo "  2. Or run: source ~/.bashrc"
+    elif [ "$SHELL_TYPE" = "zsh" ]; then
+        echo "  2. Or run: source ~/.zshrc"
+    fi
+    
     echo
     info "Get started with: save --help"
 }
