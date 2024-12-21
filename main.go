@@ -124,6 +124,9 @@ func NewCommandStore() (*CommandStore, error) {
 	configPath := ConfigPath
 	if configPath == "" {
 		configPath = filepath.Join(homeDir, ".save_history.json")
+	} else {
+		// For development builds, always append the history filename
+		configPath = filepath.Join(configPath, "history.json")
 	}
 
 	return &CommandStore{
@@ -307,10 +310,17 @@ func (cs *CommandStore) UndoLastEdit(id int) error {
 
 
 func (cs *CommandStore) load() error {
+    // Create directory if it doesn't exist
+    dir := filepath.Dir(cs.filepath)
+    if err := os.MkdirAll(dir, 0755); err != nil {
+        return fmt.Errorf("failed to create config directory: %w", err)
+    }
+
     data, err := os.ReadFile(cs.filepath)
     if err != nil {
         if os.IsNotExist(err) {
-            return nil
+            // If file doesn't exist, create it with empty data
+            return cs.save()
         }
         return err
     }
@@ -332,14 +342,12 @@ func (cs *CommandStore) load() error {
         cs.chains = saveData.Chains
     }
 
-    // Update lastID
+    // Update lastID and lastChainID
     for _, cmd := range cs.commands {
         if cmd.ID > cs.lastID {
             cs.lastID = cmd.ID
         }
     }
-
-    // Update lastChainID
     for _, chain := range cs.chains {
         if chain.ID > cs.lastChainID {
             cs.lastChainID = chain.ID
@@ -1209,6 +1217,55 @@ func (cs *CommandStore) repairIntegrity() error {
     return cs.save()
 }
 
+func (cs *CommandStore) listFavorites() {
+    hasFavorites := false
+    fmt.Println("\n🌟 Favorite Commands:")
+    fmt.Println("-------------------")
+    
+    for _, cmd := range cs.commands {
+        if cmd.IsFavorite {
+            hasFavorites = true
+            cs.printCommandDetails(cmd)
+            fmt.Println()
+        }
+    }
+    
+    if !hasFavorites {
+        fmt.Println("No favorite commands found.")
+        fmt.Println("\nTip: Mark a command as favorite using:")
+        fmt.Println("  save --favorite <command_id>")
+    }
+}
+
+func (cs *CommandStore) printCommandDetails(cmd Command) {
+    description := cmd.Description
+    if description == "" {
+        description = "No description"
+    }
+    
+    workDir := cmd.Dir
+    if workDir == "" {
+        workDir = "Current directory"
+    }
+    
+    fmt.Printf("#%d: %s\n", cmd.ID, cmd.Raw)
+    fmt.Printf("   📝 %s\n", description)
+    fmt.Printf("   📂 %s\n", workDir)
+    if len(cmd.Tags) > 0 {
+        fmt.Printf("   🏷️  %s\n", strings.Join(cmd.Tags, ", "))
+    }
+    fmt.Printf("   ✨ Success rate: %.1f%% (%d runs)\n", 
+        calculateSuccessRate(cmd.RunCount, cmd.SuccessCount),
+        cmd.RunCount)
+}
+
+func calculateSuccessRate(total, success int) float64 {
+    if total == 0 {
+        return 0.0
+    }
+    return (float64(success) / float64(total)) * 100
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -1762,6 +1819,9 @@ func main() {
 			}
 		}
 
+	case "--list-favorites", "-lf":
+		store.listFavorites()
+
 	default:
 		var tags []string
 		var description string
@@ -1834,6 +1894,7 @@ func printUsage() {
     fmt.Printf("  %-30s Add a description to the command\n", "--desc <description>")
     fmt.Printf("  %-30s Save with current directory\n", "--dir")
     fmt.Printf("  %-30s Add comma-separated tags\n", "--tag <tags>")
+    fmt.Printf("  %-30s Add a favorite command\n", "--favorite <id>")
 
     // Basic Commands Section
     fmt.Printf("\n%sBASIC COMMANDS:%s\n", bold, reset)
@@ -1876,8 +1937,8 @@ func printUsage() {
     fmt.Printf("\n%sEXAMPLES:%s\n", yellow, reset)
     
     fmt.Printf("\n%s  Basic Command Usage:%s\n", yellow, reset)
-    fmt.Printf("    save 'echo Hello World'                    # Save and run simple command\n")
-    fmt.Printf("    save --desc 'Greeting' 'echo Hello'        # Save with description\n")
+    fmt.Printf("    save 'echo Hello World'                   # Save and run simple command\n")
+    fmt.Printf("    save --desc 'Greeting' 'echo Hello'       # Save with description\n")
     fmt.Printf("    save --tag cli,test 'npm test'            # Save with tags\n")
     fmt.Printf("    save --rerun 42                           # Rerun command #42\n")
     fmt.Printf("    save --favorite 42                        # Mark command #42 as favorite\n")
@@ -1885,7 +1946,7 @@ func printUsage() {
     fmt.Printf("    save --config-path                        # Show config file location\n")
     
     fmt.Printf("\n%s  Command Editing:%s\n", yellow, reset)
-    fmt.Printf("    save --interactive-edit 1                  # Edit command interactively\n")
+    fmt.Printf("    save --interactive-edit 1                 # Edit command interactively\n")
     fmt.Printf("    save --add-tags 1 'git,prod'              # Add tags to command\n")
     fmt.Printf("    save --edit 1 --desc 'New description'    # Update description\n")
     fmt.Printf("    save --undo 1                             # Undo last edit\n")
@@ -1899,13 +1960,13 @@ func printUsage() {
     fmt.Printf("    save --search 'git'                       # Search for git commands\n")
     fmt.Printf("    save --filter-tag docker                  # Show docker commands\n")
     fmt.Printf("    save --filter-dir ~/projects              # Show commands from directory\n")
-    fmt.Printf("    save --list-tags                         # Show all tags\n")
-    fmt.Printf("    save --favorite 42                       # Mark command as favorite\n")
+    fmt.Printf("    save --list-tags                          # Show all tags\n")
+    fmt.Printf("    save --favorite 42                        # Mark command as favorite\n")
 
     fmt.Printf("\n%s  Backup and Stats:%s\n", yellow, reset)
     fmt.Printf("    save --export backup.json                 # Export commands\n")
     fmt.Printf("    save --import backup.json                 # Import commands\n")
-    fmt.Printf("    save --stats                             # Show statistics\n\n")
+    fmt.Printf("    save --stats                              # Show statistics\n\n")
 
     fmt.Printf("%sFor more information and documentation, visit: https://github.com/t-rhex/save-go%s\n\n", blue, reset)
 }

@@ -145,6 +145,9 @@ restore_on_failure() {
 install_save() {
     info "Installing save version $VERSION..."
     
+    # Set install path
+    INSTALL_PATH="/Users/$(whoami)/bin"
+    
     # Backup before installation
     local timestamp=$(date +%Y%m%d_%H%M%S)
     backup_config
@@ -183,35 +186,44 @@ install_save() {
 
 # Setup shell integration
 setup_shell() {
-    info "Setting up shell integration..."
-    
-    # Detect shell
-    SHELL_TYPE=$(basename "$SHELL")
-    
-    case "$SHELL_TYPE" in
-        "bash")
-            if ! grep -q "PATH=\"$INSTALL_PATH:\$PATH\"" "$HOME/.bashrc"; then
-                echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-            fi
-            if ! grep -q "bash_completion.d/save" "$HOME/.bashrc"; then
-                echo '[[ -f ~/.bash_completion.d/save ]] && . ~/.bash_completion.d/save' >> "$HOME/.bashrc"
-            fi
-            success "Added Bash configuration"
+    # Detect current shell and set RC file
+    case "$SHELL" in
+        */zsh)
+            SHELL_RC="$HOME/.zshrc"
             ;;
-        "zsh")
-            if ! grep -q "PATH=\"$INSTALL_PATH:\$PATH\"" "$HOME/.zshrc"; then
-                echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
+        */bash)
+            SHELL_RC="$HOME/.bashrc"
+            # For macOS, also check .bash_profile
+            if [[ "$OSTYPE" == "darwin"* ]] && [ -f "$HOME/.bash_profile" ]; then
+                SHELL_RC="$HOME/.bash_profile"
             fi
-            if ! grep -q "fpath=(~/.zsh/completion" "$HOME/.zshrc"; then
-                echo 'fpath=(~/.zsh/completion $fpath)' >> "$HOME/.zshrc"
-            fi
-            success "Added Zsh configuration"
             ;;
         *)
-            warn "Unknown shell type: $SHELL_TYPE"
-            warn "Please manually add $INSTALL_PATH to your PATH"
+            warn "Unsupported shell: $SHELL. Please manually add $INSTALL_PATH to your PATH"
+            return
             ;;
     esac
+
+    info "Updating $SHELL_RC..."
+    
+    # Set install path
+    INSTALL_PATH="/Users/$(whoami)/bin"
+    
+    # Create bin directory if it doesn't exist
+    mkdir -p "$INSTALL_PATH"
+    
+    # Add PATH to shell RC if not already present
+    if ! grep -q "export PATH=\"$INSTALL_PATH:\$PATH\"" "$SHELL_RC"; then
+        echo -e "\n# Added by save installer" >> "$SHELL_RC"
+        echo "export PATH=\"$INSTALL_PATH:\$PATH\"" >> "$SHELL_RC"
+        success "Updated $SHELL_RC with PATH"
+    else
+        info "PATH already configured in $SHELL_RC"
+    fi
+    
+    # Source the RC file
+    info "To use 'save' command immediately, run:"
+    echo "    source $SHELL_RC"
 }
 
 # Main installation process

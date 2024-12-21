@@ -31,6 +31,7 @@ help:
 	@echo "  build          - Build the application"
 	@echo "  build-dev      - Build the application with debug information"
 	@echo "  clean          - Remove built binaries"
+	@echo "  clean-all      - Remove binaries and all config files"
 	@echo "  install        - Install system-wide (requires sudo)"
 	@echo "  user-install   - Install for current user only"
 	@echo "  uninstall      - Remove the application"
@@ -49,12 +50,20 @@ build: $(GOFILES)
 build-dev: $(GOFILES)
 	@mkdir -p $(DEV_CONFIG_PATH)
 	@echo "Building development version with config path: $(DEV_CONFIG_PATH)"
-	go build -ldflags "$(DEV_LDFLAGS)" -gcflags="all=-N -l" -o $(DEV_BINARY)
+	go build -ldflags "-X main.Version=$(DEV_VERSION) -X main.ConfigPath=$(DEV_CONFIG_PATH)" -gcflags="all=-N -l" -o $(DEV_BINARY)
 
 clean:
 	rm -f $(BINARY)
 	rm -f $(DEV_BINARY)
-	@echo "Note: Development config directory $(DEV_CONFIG_PATH) is preserved"
+	@echo "Note: Config files are preserved at:"
+	@echo "  - Production: $(HOME)/.save_history.json"
+	@echo "  - Development: $(DEV_CONFIG_PATH)/history.json"
+
+clean-all: clean
+	@echo "Removing all config files..."
+	rm -f $(HOME)/.save_history.json
+	rm -rf $(DEV_CONFIG_PATH)
+	@echo "All config files removed"
 
 test:
 	go test -v ./...
