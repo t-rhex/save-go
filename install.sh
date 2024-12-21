@@ -17,10 +17,32 @@ success() { echo -e "${GREEN}SUCCESS:${NC} $1"; }
 warn() { echo -e "${YELLOW}WARNING:${NC} $1"; }
 error() { echo -e "${RED}ERROR:${NC} $1"; exit 1; }
 
+# Move these to the top, before any functions
+BINARY="save"
+REPO="t-rhex/save-go"
+INSTALL_PATH="$HOME/.local/bin"
+INSTALL_TYPE=${INSTALL_TYPE:-"user"}  # Default to user install
+
 # Helper functions
 get_latest_version() {
-    curl --silent "https://api.github.com/repos/$REPO/releases/latest" | 
-    grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/' || echo ""
+    local api_response
+    api_response=$(curl -sS "https://api.github.com/repos/$REPO/releases/latest")
+    
+    if [ -z "$api_response" ]; then
+        warn "Failed to get response from GitHub API"
+        return 1
+    fi
+    
+    # Extract tag_name directly using grep and cut
+    LATEST_VERSION=$(echo "$api_response" | grep '"tag_name":' | cut -d'"' -f4)
+    
+    if [ -z "$LATEST_VERSION" ]; then
+        warn "Could not extract version from GitHub API response"
+        return 1
+    fi
+    
+    # Remove 'v' prefix if present
+    echo "${LATEST_VERSION#v}"
 }
 
 version_gt() {
@@ -33,10 +55,6 @@ if [ -z "$VERSION" ]; then
     VERSION="0.1.0"  # Fallback version
     warn "Could not fetch latest version, defaulting to $VERSION"
 fi
-BINARY="save"
-REPO="t-rhex/save-go"
-INSTALL_PATH="$HOME/.local/bin"
-INSTALL_TYPE=${INSTALL_TYPE:-"user"}  # Default to user install
 
 # Check if command exists
 check_command() {
