@@ -141,6 +141,12 @@ function Install-Save {
         [string]$Version = $script:Version
     )
     
+    # Add version detection here
+    if ($Version -eq "latest") {
+        $Version = Get-LatestVersion
+        Write-Info "Latest version is: $Version"
+    }
+    
     Write-Info "Installing save version $Version..."
     
     # Set install path
@@ -158,7 +164,12 @@ function Install-Save {
         
         # Checkout specific version if not main
         if ($Version -ne "main") {
+            Write-Info "Checking out version v$Version..."
             git checkout --quiet "v$Version"
+            if ($LASTEXITCODE -ne 0) {
+                Write-Error "Failed to checkout version v$Version"
+                return
+            }
         }
         
         # Build
@@ -175,15 +186,37 @@ function Install-Save {
         
         Write-Success "Installation complete!"
     }
+    catch {
+        Write-Error "Installation failed: $_"
+    }
     finally {
         Pop-Location
-        Remove-Item -Recurse -Force $tempDir
+        Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
+    }
+}
+
+# Get latest version from GitHub API
+function Get-LatestVersion {
+    try {
+        $response = Invoke-RestMethod -Uri "https://api.github.com/repos/t-rhex/save-go/releases/latest"
+        $version = $response.tag_name
+        return $version.TrimStart('v')  # Remove 'v' prefix if present
+    }
+    catch {
+        Write-Warning "Could not fetch latest version from GitHub: $_"
+        return "0.1.0"  # Fallback version
     }
 }
 
 # Main installation process
 function Main {
     Write-ColorOutput Blue "=== Save Command Manager Installer ==="
+    
+    # If version is "latest", get the latest version
+    if ($Version -eq "latest") {
+        $script:Version = Get-LatestVersion
+        Write-Info "Latest version is: $script:Version"
+    }
     
     Check-Prerequisites
     Setup-Directories
