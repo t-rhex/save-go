@@ -141,16 +141,7 @@ function Install-Save {
         [string]$Version = $script:Version
     )
     
-    # Add version detection here
-    if ($Version -eq "latest") {
-        $Version = Get-LatestVersion
-        Write-Info "Latest version is: $Version"
-    }
-    
     Write-Info "Installing save version $Version..."
-    
-    # Set install path
-    $script:InstallPath = Join-Path $env:USERPROFILE "bin"
     
     # Create temporary directory
     $tempDir = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
@@ -172,17 +163,19 @@ function Install-Save {
             }
         }
         
-        # Build
+        # Build with correct version
         Write-Info "Building..."
-        go build -o save.exe
+        $buildCmd = "go build -ldflags `"-X main.Version=$Version`" -o save.exe"
+        Invoke-Expression $buildCmd
+        
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Build failed"
+            return
+        }
         
         # Install
         Write-Info "Installing..."
         Copy-Item save.exe -Destination "$InstallPath\save.exe" -Force
-        
-        # Setup PowerShell completion
-        $completionScript = & "$InstallPath\save.exe" --generate-completion powershell
-        Set-Content -Path "$env:USERPROFILE\Documents\WindowsPowerShell\Completions\save.ps1" -Value $completionScript
         
         Write-Success "Installation complete!"
     }
@@ -212,18 +205,21 @@ function Get-LatestVersion {
 function Main {
     Write-ColorOutput Blue "=== Save Command Manager Installer ==="
     
-    # If version is "latest", get the latest version
+    # Get latest version first
     if ($Version -eq "latest") {
         $script:Version = Get-LatestVersion
         Write-Info "Latest version is: $script:Version"
+    } else {
+        $script:Version = $Version
     }
     
     Check-Prerequisites
     Setup-Directories
     Setup-ShellEnvironment
-    Install-Save
+    Install-Save -Version $script:Version
     
-    Write-Info "To start using save, either:"
+    Write-Success "`nSave Command Manager has been installed successfully!"
+    Write-Info "`nTo start using save, either:"
     Write-Info "  1. Restart your terminal"
     Write-Info "  2. Or run: `$env:Path = [Environment]::GetEnvironmentVariable('Path', 'User')"
     Write-Info "`nGet started with: save --help"

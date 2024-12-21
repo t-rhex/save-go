@@ -199,9 +199,9 @@ install_save() {
     # Build and install
     info "Building and installing..."
     if [ "$INSTALL_TYPE" = "system" ]; then
-        make install
+        make install VERSION=$VERSION
     else
-        make user-install INSTALL_PATH="$INSTALL_PATH"
+        make user-install INSTALL_PATH="$INSTALL_PATH" VERSION=$VERSION
     fi
     
     # Check installation success and restore on failure
@@ -271,11 +271,17 @@ main() {
     echo
     info "To start using save, either:"
     echo "  1. Restart your terminal"
-    if [ "$SHELL_TYPE" = "bash" ]; then
-        echo "  2. Or run: source ~/.bashrc"
-    elif [ "$SHELL_TYPE" = "zsh" ]; then
-        echo "  2. Or run: source ~/.zshrc"
-    fi
+    case "$SHELL" in
+        */zsh)
+            echo "  2. Or run: source ~/.zshrc"
+            ;;
+        */bash)
+            echo "  2. Or run: source ~/.bashrc"
+            if [[ "$OSTYPE" == "darwin"* ]] && [ -f "$HOME/.bash_profile" ]; then
+                echo "  2. Or run: source ~/.bash_profile"
+            fi
+            ;;
+    esac
     
     echo
     info "Get started with: save --help"
